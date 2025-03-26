@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 # Ottieni le variabili d'ambiente
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
-WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 TRIVIA_API_URL = "https://opentdb.com/api.php?amount=1&type=multiple"
 
 # Funzione per chiamare l'API delle notizie
@@ -27,16 +26,6 @@ def get_news():
         url = top_article["url"]
         return f"Notizia: {title}\n{description}\nLeggi di più: {url}"
     return "Non sono riuscito a trovare notizie."
-
-# Funzione per chiamare l'API meteo
-def get_weather(city):
-    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric"
-    response = requests.get(url).json()
-    if response.get("main"):
-        temp = response["main"]["temp"]
-        description = response["weather"][0]["description"]
-        return f"La temperatura a {city} è di {temp}°C con {description}."
-    return "Non sono riuscito a ottenere il meteo per questa città."
 
 # Funzione per chiamare l'API di traduzione
 def translate_text(text, target_language):
@@ -61,7 +50,6 @@ def get_trivia():
 async def start(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton("Notizie", callback_data='notizie')],
-        [InlineKeyboardButton("Meteo", callback_data='meteo')],
         [InlineKeyboardButton("Traduci", callback_data='traduci')],
         [InlineKeyboardButton("Trivia", callback_data='trivia')]
     ]
@@ -71,15 +59,11 @@ async def start(update: Update, context: CallbackContext):
 # Funzione per gestire la risposta dei bottoni
 async def button(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()  # Necessario per rimuovere il "caricamento"
+    await query.answer()
 
-    # In base al bottone premuto, chiama la funzione appropriata
     if query.data == 'notizie':
         news = get_news()
         await query.edit_message_text(text=f"Notizie:\n{news}")
-    elif query.data == 'meteo':
-        await query.edit_message_text(text="Scrivi il nome della città per la quale desideri le previsioni meteo.")
-        context.user_data['state'] = 'meteo'
     elif query.data == 'traduci':
         await query.edit_message_text(text="Scrivi il testo che desideri tradurre.")
         context.user_data['state'] = 'traduci'
@@ -92,26 +76,21 @@ async def handle_message(update: Update, context: CallbackContext):
     user_message = update.message.text
     state = context.user_data.get('state')
 
-    if state == 'meteo':
-        weather = get_weather(user_message)
-        await update.message.reply_text(weather)
-        context.user_data['state'] = None  # Resetta lo stato
-    elif state == 'traduci':
+    if state == 'traduci':
         translated = translate_text(user_message, "en")
         await update.message.reply_text(f"Tradotto: {translated}")
-        context.user_data['state'] = None  # Resetta lo stato
+        context.user_data['state'] = None
     else:
         await update.message.reply_text("Per favore, scegli un'azione tramite il menu.")
 
 # Configura l'Application in modalità Polling
 def main():
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-
-    # Aggiungi handler
+    
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button))
-
+    
     logger.info("Bot avviato in modalità Polling...")
     application.run_polling()
 
